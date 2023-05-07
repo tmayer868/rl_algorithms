@@ -80,3 +80,42 @@ class Arm:
         coef = self.sample_coef()
         logit = coef[0] + context @ coef[1:]
         return 1 / (1 + np.exp(-logit))
+
+
+class MultiArm:
+    def __init__(self, n_arms, n_features, q_initial=1):
+        """
+
+        :param n_arms: Number of available arms
+        :param n_features: Number of context variables
+        :param q_initial: Initialization of parameter variance.
+        """
+        self.n_arms = n_arms
+        self.arms = [Arm(n_features, q_initial) for _ in range(n_arms)]
+
+    def select_arm(self, context):
+        """
+        Selects the arm with the highest expected
+        reward. The reward is calculated by sampling
+        from each coefficient's posterior distribution.
+        :param context: Matrix of context variables
+        :return: Selected Arm
+        """
+        predictions = np.zeros((context.shape[0], self.n_arms))
+        for i in range(self.n_arms):
+            predictions[:, i] = [self.arms[i].make_prediction(context[k]) for k in range(context.shape[0])]
+        return np.argmax(predictions, axis=1)
+
+    def update_arms(self, results):
+        """
+        Updates the posterior distribution
+        for each arm's coefficients based of
+        off new data.
+        :param results:
+        :return: None
+        """
+        results_dict = {int(path.split('_')[1]): results[results.path == path] for path in results.path.unique()}
+        for arm, result in results_dict.items():
+            self.arms[arm - 1].update(result.drop(['id', 'path', 'reward'], axis=1).to_numpy(),
+                                      result.reward.to_numpy())
+        return None
